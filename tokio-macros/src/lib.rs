@@ -21,6 +21,7 @@ extern crate proc_macro;
 mod entry;
 mod select;
 
+use entry::RuntimeFlavor;
 use proc_macro::TokenStream;
 
 /// Marks async function to be executed by the selected runtime. This macro
@@ -522,7 +523,13 @@ pub fn main_rt(args: TokenStream, item: TokenStream) -> TokenStream {
 /// [unstable]: ../tokio/index.html#unstable-features
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
-    entry::test(args.into(), item.into(), true).into()
+    entry::test(args.into(), item.into(), true, None).into()
+}
+
+/// Same as [`test`] but uses the multi-thread runtime by default.
+#[proc_macro_attribute]
+pub fn test_mt(args: TokenStream, item: TokenStream) -> TokenStream {
+    entry::test(args.into(), item.into(), true, Some(RuntimeFlavor::Threaded)).into()
 }
 
 /// Marks async function to be executed by runtime, suitable to test environment
@@ -537,7 +544,7 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn test_rt(args: TokenStream, item: TokenStream) -> TokenStream {
-    entry::test(args.into(), item.into(), false).into()
+    entry::test(args.into(), item.into(), false, None).into()
 }
 
 /// Always fails with the error message below.

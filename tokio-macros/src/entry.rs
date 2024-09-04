@@ -7,7 +7,7 @@ use syn::{braced, Attribute, Ident, Path, Signature, Visibility};
 type AttributeArgs = syn::punctuated::Punctuated<syn::Meta, syn::Token![,]>;
 
 #[derive(Clone, Copy, PartialEq)]
-enum RuntimeFlavor {
+pub(super) enum RuntimeFlavor {
     CurrentThread,
     Threaded,
 }
@@ -79,13 +79,16 @@ struct Configuration {
 }
 
 impl Configuration {
-    fn new(is_test: bool, rt_multi_thread: bool) -> Self {
-        Configuration {
-            rt_multi_thread_available: rt_multi_thread,
-            default_flavor: match is_test {
+    fn new(is_test: bool, rt_multi_thread: bool, default_flavor: Option<RuntimeFlavor>) -> Self {
+        let default_flavor = default_flavor.unwrap_or_else(|| {
+            match is_test {
                 true => RuntimeFlavor::CurrentThread,
                 false => RuntimeFlavor::Threaded,
-            },
+            }
+        });
+        Configuration {
+            rt_multi_thread_available: rt_multi_thread,
+            default_flavor,
             flavor: None,
             worker_threads: None,
             start_paused: None,
@@ -295,13 +298,14 @@ fn build_config(
     args: AttributeArgs,
     is_test: bool,
     rt_multi_thread: bool,
+    default_flavor: Option<RuntimeFlavor>,
 ) -> Result<FinalConfig, syn::Error> {
     if input.sig.asyncness.is_none() {
         let msg = "the `async` keyword is missing from the function declaration";
         return Err(syn::Error::new_spanned(input.sig.fn_token, msg));
     }
 
-    let mut config = Configuration::new(is_test, rt_multi_thread);
+    let mut config = Configuration::new(is_test, rt_multi_thread, default_flavor);
     let macro_name = config.macro_name();
 
     for arg in args {
@@ -502,7 +506,7 @@ pub(crate) fn main(args: TokenStream, item: TokenStream, rt_multi_thread: bool) 
     } else {
         AttributeArgs::parse_terminated
             .parse2(args)
-            .and_then(|args| build_config(&input, args, false, rt_multi_thread))
+            .and_then(|args| build_config(&input, args, false, rt_multi_thread, None))
     };
 
     match config {
@@ -540,7 +544,7 @@ fn is_test_attribute(attr: &Attribute) -> bool {
     })
 }
 
-pub(crate) fn test(args: TokenStream, item: TokenStream, rt_multi_thread: bool) -> TokenStream {
+pub(crate) fn test(args: TokenStream, item: TokenStream, rt_multi_thread: bool, default_flavor: Option<RuntimeFlavor>) -> TokenStream {
     // If any of the steps for this macro fail, we still want to expand to an item that is as close
     // to the expected output as possible. This helps out IDEs such that completions and other
     // related features keep working.
@@ -554,7 +558,7 @@ pub(crate) fn test(args: TokenStream, item: TokenStream, rt_multi_thread: bool) 
     } else {
         AttributeArgs::parse_terminated
             .parse2(args)
-            .and_then(|args| build_config(&input, args, true, rt_multi_thread))
+            .and_then(|args| build_config(&input, args, true, rt_multi_thread, default_flavor))
     };
 
     match config {
